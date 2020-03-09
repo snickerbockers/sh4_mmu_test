@@ -9,14 +9,14 @@
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-.globl testcase_tlb_miss_delay_slot
+.globl testcase_data_tlb_miss
 
 
 	.align 2
 
 invalidate_tlb:
 	! disable any existing TLB entries
-	mov.l addr_mmu_base, r1
+	mov.l mmu_base, r1
 	mov.l @(16, r1), r0
 	or #4, r0 ! TI bit
 	rts
@@ -24,7 +24,7 @@ invalidate_tlb:
 
 enable_mmu:
 	! enable MMU address translation
-	mov.l addr_mmu_base, r1
+	mov.l mmu_base, r1
 	mov.l @(16, r1), r0
 	or #1, r0 ! AT bit
 	rts
@@ -32,7 +32,7 @@ enable_mmu:
 
 disable_mmu:
 	! disable MMU address translation
-	mov.l addr_mmu_base, r1
+	mov.l mmu_base, r1
 	mov.l @(16, r1), r0
 	mov #1, r2
 	not r2, r2
@@ -40,20 +40,28 @@ disable_mmu:
 	rts
 	mov.l r0, @(16, r1)
 
-testcase_tlb_miss_delay_slot:
+testcase_data_tlb_miss:
 
-	! make sure we're in the P1 area to disable instruction address translation
-	mov.l addr_tlb_miss_delay_slot_p1_area, r0
-	mov.l p1_ptr_mask, r1
+	! make sure we're in the P1 area to disable instruction address
+	! translation
+	mova testcase_data_tlb_miss_p1_area, r0
+	mov #-1, r1
+	shlr r1
+	shlr r1
+	shlr r1
 	and r1, r0
-	mov.l p1_ptr_val, r1
+
+	mov #1, r1
+	rotr r1
 	or r1, r0
 
 	jmp @r0
 	nop
 
-tlb_miss_delay_slot_p1_area:
+.align 4
+testcase_data_tlb_miss_p1_area:
 	mov.l r8, @-r15
+	mov.l r9, @-r15
 	sts.l pr, @-r15
 
 	mov.l addr_read_tlb_miss_results, r8
@@ -62,7 +70,7 @@ tlb_miss_delay_slot_p1_area:
 	nop
 
 	! set up the TLB handler
-	mov.l addr_my_tlb_miss_handler, r0
+	mova my_tlb_miss_handler, r0
 	mov.l addr_addr_tlb_miss_handler, r1
 	mov.l r0, @r1
 
@@ -70,29 +78,83 @@ tlb_miss_delay_slot_p1_area:
 	nop
 
 	! first testcase: a simple read which will miss the TLB
+	mova after_testcase1, r0
+	mov r0, r9
 	xor r0, r0
 	mov.l @r0, r0
 
-skipit:
+	.align 4
+after_testcase1:
+
+	! second testcase: a simple write which will miss the TLB
+	mova after_testcase2, r0
+	mov r0, r9
+	xor r0, r0
+	mov.l r0, @r0
+
+	.align 4
+after_testcase2:
+
+	! third testcase: a read which will miss the TLB from within a branch
+	! delay slot
+	mova after_testcase3, r0
+	mov r0, r9
+	xor r0, r0
+
+	! doesn't matter which label it jumps to because we won't get there
+	bsr disable_mmu
+	mov.l @r0, r0
+
+	.align 4
+after_testcase3:
+
+	! fourth testcase: a write which will miss the TLB from within a branch
+	! delay slot
+	mova after_testcase4, r0
+	mov r0, r9
+	xor r0, r0
+
+	! doesn't matter which label it jumps to because we won't get there
+	bsr disable_mmu
+	mov.l r0, @r0
+
+	.align 4
+after_testcase4:
+
 	bsr disable_mmu
 	nop
 
 	lds.l @r15+, pr
 	mov.l addr_read_tlb_miss_results, r0
+	mov.l @r15+, r9
 	rts
 	mov.l @r15+, r8
 
+.align 4
 my_tlb_miss_handler:
 
+	! validate that EXPEVT is either write-miss or read-miss
+	! we don't check that it's the specific value it should be for the
+	! given testcase, we just assume that if it's one of the two then it
+	! must be right
+	mov.l mmu_base, r0
+	mov.l @(0x24, r0), r0
+	cmp/eq #0x40, r0
+	bt my_tlb_miss_handler_no_error
+	cmp/eq #0x60, r0
+	bt my_tlb_miss_handler_no_error
+
+	bra my_tlb_miss_handler_ret
+	mov #0, r1
+
+my_tlb_miss_handler_no_error:
 	stc spc, r1
+
+my_tlb_miss_handler_ret:
 	mov.l r1, @r8
-	add #4, r8
-
-	mov.l addr_skipit, r0
-	ldc r0, spc
-
+	ldc r9, spc
 	rte
-	nop
+	add #4, r8
 
 	.align 4
 	! pointer to MMU registers
@@ -102,24 +164,12 @@ my_tlb_miss_handler:
 	! offset 12 - TEA
 	! offset 16 - MMUCR
 	! offset 52 - PTEA
-addr_mmu_base:
+mmu_base:
 	.long 0xff000000
-addr_tlb_miss_delay_slot_p1_area:
-	.long tlb_miss_delay_slot_p1_area
-p1_ptr_mask:
-	.long 0x1fffffff
-p1_ptr_val:
-	.long 0x80000000
-bad_ptr:
-	.long 0
 addr_addr_tlb_miss_handler:
 	.long addr_tlb_miss_handler
-addr_my_tlb_miss_handler:
-	.long my_tlb_miss_handler
-addr_skipit:
-	.long skipit
 
-	.set N_READ_TLB_MISS_RESULTS, 1
+	.set N_READ_TLB_MISS_RESULTS, 4
 read_tlb_miss_results:
 	.space 4*N_READ_TLB_MISS_RESULTS
 addr_read_tlb_miss_results:

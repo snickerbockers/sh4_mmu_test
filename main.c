@@ -11,7 +11,7 @@
 
 #include "sh4_mmu_test.h"
 
-unsigned* testcase_tlb_miss_delay_slot(void);
+unsigned* testcase_data_tlb_miss(void);
 
 #define SPG_HBLANK_INT (*(unsigned volatile*)0xa05f80c8)
 #define SPG_VBLANK_INT (*(unsigned volatile*)0xa05f80cc)
@@ -455,98 +455,6 @@ static char const *hexstr_no_leading_0(unsigned val) {
 
 unsigned short fonts[N_FONTS][288 * 24 * 12];
 
-/*
-TRANSLATE 32 BIT AREA to 64 BIT
-if (addr32 > HALFWAY_POINT)
-    return (addr32 - HALFWAY_POINT) * 2 + 4
-else
-    return addr32 * 2
-
-TRANSLATE 64 BIT AREA to 32 BIT
-if (addr32 % 8)
-    return ((addr - 4) / 2) + HALFWAY_POINT
-else
-    return addr / 2
-*/
-
-#define PVR2_TEX_MEM_BANK_SIZE (4 << 20)
-#define PVR2_TOTAL_VRAM_SIZE (8 << 20)
-
-static int disp_results(void) {
-    for (;;) {
-        void volatile *fb = get_backbuffer();
-        clear_screen(fb, make_color(0, 0, 0));
-        drawstring(fb, fonts[4], "*****************************************************", 0, 0);
-        drawstring(fb, fonts[4], "*                                                   *", 1, 0);
-        drawstring(fb, fonts[4], "*                   SH4 MMU TEST                    *", 2, 0);
-        drawstring(fb, fonts[4], "*                   RESULT SCREEN                   *", 3, 0);
-        drawstring(fb, fonts[4], "*                                                   *", 4, 0);
-        drawstring(fb, fonts[4], "*****************************************************", 5, 0);
-
-        /* drawstring(fb, fonts[4], "     SH4 VRAM 32-BIT", 7, 0); */
-        /* if (sh4_vram_test_results.test_results_32 == 0) { */
-        /*     drawstring(fb, fonts[1], "SUCCESS", 7, 21); */
-        /* } else { */
-        /*     drawstring(fb, fonts[2], "FAILURE - ", 7, 21); */
-        /*     drawstring(fb, fonts[2], */
-        /*                hexstr(sh4_vram_test_results.test_results_32), 7, 31); */
-        /* } */
-
-        /* drawstring(fb, fonts[4], "     SH4 VRAM 16-BIT", 8, 0); */
-        /* if (sh4_vram_test_results.test_results_16 == 0) { */
-        /*     drawstring(fb, fonts[1], "SUCCESS", 8, 21); */
-        /* } else { */
-        /*     drawstring(fb, fonts[2], "FAILURE - ", 8, 21); */
-        /*     drawstring(fb, fonts[2], */
-        /*                hexstr(sh4_vram_test_results.test_results_32), 7, 31); */
-        /* } */
-
-        /* drawstring(fb, fonts[4], "     SH4 VRAM 8-BIT", 9, 0); */
-        /* if (sh4_vram_test_results.test_results_8 == 0) { */
-        /*     drawstring(fb, fonts[1], "SUCCESS", 9, 21); */
-        /* } else { */
-        /*     drawstring(fb, fonts[2], "FAILURE - ", 9, 21); */
-        /*     drawstring(fb, fonts[2], */
-        /*                hexstr(sh4_vram_test_results.test_results_32), 7, 31); */
-        /* } */
-
-        /* drawstring(fb, fonts[4], "     SH4 VRAM FLOAT", 10, 0); */
-        /* if (sh4_vram_test_results.test_results_float == 0) { */
-        /*     drawstring(fb, fonts[1], "SUCCESS", 10, 21); */
-        /* } else { */
-        /*     drawstring(fb, fonts[2], "FAILURE - ", 10, 21); */
-        /*     drawstring(fb, fonts[2], */
-        /*                hexstr(sh4_vram_test_results.test_results_32), 7, 31); */
-        /* } */
-
-        /* drawstring(fb, fonts[4], "     SH4 VRAM DOUBLE", 11, 0); */
-        /* if (sh4_vram_test_results.test_results_double == 0) { */
-        /*     drawstring(fb, fonts[1], "SUCCESS", 11, 21); */
-        /* } else { */
-        /*     drawstring(fb, fonts[2], "FAILURE - ", 11, 21); */
-        /*     drawstring(fb, fonts[2], */
-        /*                hexstr(sh4_vram_test_results.test_results_32), 7, 31); */
-        /* } */
-
-        /* drawstring(fb, fonts[4], "     SH4 VRAM SQ", 12, 0); */
-        /* if (sh4_vram_test_results.test_results_sq == 0) { */
-        /*     drawstring(fb, fonts[1], "SUCCESS", 12, 21); */
-        /* } else { */
-        /*     drawstring(fb, fonts[2], "FAILURE - ", 12, 21); */
-        /*     drawstring(fb, fonts[2], */
-        /*                hexstr(sh4_vram_test_results.test_results_32), 7, 31); */
-        /* } */
-
-        while (!check_vblank())
-            ;
-        swap_buffers();
-        update_controller();
-
-        if (check_btn(1 << 2)) // a button
-            return STATE_MENU;
-    }
-}
-
 #ifndef NULL
 #define NULL ((void*)0x0)
 #endif
@@ -556,11 +464,6 @@ static struct menu_entry {
     state_fn fn;
 } const menu_entries[] = {
     { "READ MISS IN DELAY SLOT", run_tlb_read_miss_delay_test },
-    /* { "SH4 VRAM TEST (FAST)", STATE_SH4_VRAM_TEST_FAST }, */
-    /* { "SH4 VRAM TEST (SLOW)", STATE_SH4_VRAM_TEST_SLOW }, */
-    /* { "DMA TEST (64-BIT)", STATE_DMA_TEST_64BIT }, */
-    /* { "DMA TEST (32-BIT)", STATE_DMA_TEST_32BIT }, */
-    /* { "DMA TEST (YUV 420 SINGLE TEX)", STATE_DMA_TEST_YUV }, */
 
     { NULL }
 };
@@ -633,19 +536,36 @@ static void* main_menu(void) {
 
 static void* run_tlb_read_miss_delay_test(void) {
 
-    unsigned *res = testcase_tlb_miss_delay_slot( );
+    static char const *trial_names[] = {
+        "read",
+        "write",
+        "read (delay slot)",
+        "write (delay slot)",
+        NULL
+    };
+
+    unsigned *res = testcase_data_tlb_miss( );
 
     for (;;) {
         void volatile *fb = get_backbuffer();
         clear_screen(fb, make_color(0, 0, 0));
 
-        drawstring(fb, fonts[4], "     THE TEST", 7, 0);
-        /* if (res == 0) { */
-        drawstring(fb, fonts[1], "SUCCESS - ", 7, 21);
-        drawstring(fb, fonts[1], hexstr(*res), 7, 31);
-        /* } else { */
-            /* drawstring(fb, fonts[2], "FAILURE", 7, 21); */
-        /* } */
+        char const **cur_trial = trial_names;
+        int row = 7;
+        unsigned *cur_res = res;
+        while (*cur_trial) {
+            drawstring(fb, fonts[4], *cur_trial, row, 5);
+            if (*cur_res) {
+                drawstring(fb, fonts[1], "SUCCESS - ", row, 24);
+                drawstring(fb, fonts[1], hexstr(*cur_res), row, 34);
+            } else {
+                drawstring(fb, fonts[2], "FAILURE", row, 24);
+            }
+
+            row++;
+            cur_trial++;
+            cur_res++;
+        }
 
         while (!check_vblank())
             ;
@@ -667,13 +587,6 @@ static void* run_tlb_read_miss_delay_test(void) {
  * fixed it.
  */
 int dcmain(int argc, char **argv) {
-    /*
-     * The reason why these big arrays are static is to save on stack space.
-     * We only have 4KB!
-     */
-    /* static char txt_buf[N_CHAR_ROWS][N_CHAR_COLS]; */
-    /* static int txt_colors[N_CHAR_ROWS][N_CHAR_COLS]; */
-
     configure_video();
 
     create_font(fonts[0], make_color(0, 0, 0), make_color(0, 0, 0));
@@ -685,41 +598,8 @@ int dcmain(int argc, char **argv) {
 
     state = main_menu;
 
-    for (;;) {
+    for (;;)
         state = state();
-        /* switch (state) { */
-        /* case STATE_DELAY_SLOT_READ_MISS: */
-            
-            /* case STATE_SH4_VRAM_TEST_SLOW: */
-        /*     state = run_sh4_vram_slow_test(); */
-        /*     break; */
-        /* case STATE_SH4_VRAM_TEST_FAST: */
-        /*     state = run_sh4_vram_fast_test(); */
-        /*     break; */
-        /* case STATE_SH4_VRAM_TEST_RESULTS: */
-        /*     state = disp_results(); */
-        /*     break; */
-        /* case STATE_DMA_TEST_32BIT: */
-        /*     state = run_dma_tests(1); */
-        /*     break; */
-        /* case STATE_DMA_TEST_64BIT: */
-        /*     state = run_dma_tests(0); */
-        /*     break; */
-        /* case STATE_DMA_TEST_YUV: */
-        /*     state = run_yuv_dma_tests(); */
-        /*     break; */
-        /* case STATE_DMA_TEST_RESULTS: */
-        /*     state = show_dma_test_results(); */
-        /*     break; */
-        /* case STATE_DMA_TEST_YUV_RESULTS: */
-        /*     state = show_dma_test_yuv_results(); */
-        /*     break; */
-        /* default: */
-        /* case STATE_MENU: */
-        /*     state = main_menu(); */
-        /*     break; */
-        /* } */
-    }
 
     return 0;
 }
