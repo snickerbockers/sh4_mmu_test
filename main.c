@@ -12,6 +12,7 @@
 #include "sh4_mmu_test.h"
 
 unsigned* testcase_data_tlb_miss(void);
+unsigned* testcase_addr_error(void);
 
 #define SPG_HBLANK_INT (*(unsigned volatile*)0xa05f80c8)
 #define SPG_VBLANK_INT (*(unsigned volatile*)0xa05f80cc)
@@ -49,6 +50,7 @@ typedef void*(*state_fn)(void);
 static state_fn state;
 
 static void* run_tlb_read_miss_delay_test(void);
+static void* run_address_error_test(void);
 
 void *get_romfont_pointer(void);
 
@@ -464,6 +466,7 @@ static struct menu_entry {
     state_fn fn;
 } const menu_entries[] = {
     { "READ MISS IN DELAY SLOT", run_tlb_read_miss_delay_test },
+    { "ADDRESS ERROR", run_address_error_test },
 
     { NULL }
 };
@@ -546,6 +549,47 @@ static void* run_tlb_read_miss_delay_test(void) {
     };
 
     unsigned *res = testcase_data_tlb_miss( );
+
+    for (;;) {
+        void volatile *fb = get_backbuffer();
+        clear_screen(fb, make_color(0, 0, 0));
+
+        char const **cur_trial = trial_names;
+        int row = 7;
+        unsigned *cur_res = res;
+        while (*cur_trial) {
+            drawstring(fb, fonts[4], *cur_trial, row, 5);
+            if (*cur_res) {
+                drawstring(fb, fonts[1], "SUCCESS - ", row, 24);
+                drawstring(fb, fonts[1], hexstr(*cur_res), row, 34);
+            } else {
+                drawstring(fb, fonts[2], "FAILURE", row, 24);
+            }
+
+            row++;
+            cur_trial++;
+            cur_res++;
+        }
+
+        while (!check_vblank())
+            ;
+        swap_buffers();
+        update_controller();
+
+        if (check_btn(1 << 2)) // a button
+            break;
+    }
+
+    return main_menu;
+}
+
+static void* run_address_error_test(void) {
+    static char const *trial_names[] = {
+        "inst addr error",
+        NULL
+    };
+
+    unsigned *res = testcase_addr_error( );
 
     for (;;) {
         void volatile *fb = get_backbuffer();
