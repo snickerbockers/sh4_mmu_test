@@ -160,6 +160,26 @@ after_testcase3:
 	.align 4
 after_testcase4:
 
+	! fifth testcase: a branch which will miss the TLB
+	mova after_testcase5, r0
+	mov r0, r9
+
+	! now clear the upper three bits of r0 so it points to the P0 area
+	! it doesn't matter where it jumps because we won't get there
+	! all that matters is that it's in the P0 area so the MMU attempts to
+	! translate it.
+	mov #7, r1
+	rotr r1
+	rotr r1
+	rotr r1
+	not r1, r1
+	and r1, r0
+	jsr @r0
+	nop
+
+	.align 4
+after_testcase5:
+
 	bsr disable_mmu
 	nop
 
@@ -168,6 +188,7 @@ after_testcase4:
 	mov.l @r15+, r9
 	rts
 	mov.l @r15+, r8
+
 
 .align 4
 my_tlb_miss_handler:
@@ -208,7 +229,7 @@ mmu_base:
 addr_addr_tlb_miss_handler:
 	.long addr_tlb_miss_handler
 
-	.set N_READ_TLB_MISS_RESULTS, 4
+	.set N_READ_TLB_MISS_RESULTS, 5
 read_tlb_miss_results:
 	.space 4*N_READ_TLB_MISS_RESULTS
 addr_read_tlb_miss_results:
