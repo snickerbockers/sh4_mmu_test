@@ -19,16 +19,42 @@ invalidate_tlb:
 	mov.l mmu_base, r1
 	mov.l @(16, r1), r0
 	or #4, r0 ! TI bit
-	rts
 	mov.l r0, @(16, r1)
+
+	! need to make sure at least 8 instructions pass before we
+	! return to the callee and it potentially does something involving the
+	! mmu
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	rts
+	nop
 
 enable_mmu:
 	! enable MMU address translation
 	mov.l mmu_base, r1
 	mov.l @(16, r1), r0
 	or #1, r0 ! AT bit
-	rts
 	mov.l r0, @(16, r1)
+
+	! need to make sure at least 8 instructions pass before we
+	! return to the callee and it potentially does something involving the
+	! mmu
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	rts
+	nop
 
 disable_mmu:
 	! disable MMU address translation
@@ -37,8 +63,21 @@ disable_mmu:
 	mov #1, r2
 	not r2, r2
 	and r2, r0
-	rts
 	mov.l r0, @(16, r1)
+
+	! need to make sure at least 8 instructions pass before we
+	! return to the callee and it potentially does something involving the
+	! mmu
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	rts
+	nop
 
 testcase_data_tlb_miss:
 
