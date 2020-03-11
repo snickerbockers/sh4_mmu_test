@@ -544,7 +544,9 @@ static void* run_tlb_read_miss_delay_test(void) {
         "write",
         "read (delay slot)",
         "write (delay slot)",
-        "instruction fetch",
+        "inst branch",
+        "inst inc",
+        "inst inc (delay slot)",
         NULL
     };
 
