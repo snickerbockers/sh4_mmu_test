@@ -25,6 +25,9 @@ init.o: init.s
 irq.o: irq.s
 	$(AS) -little -o irq.o irq.s -g
 
+illegal_inst.o: illegal_inst.s
+	$(AS) -little -o illegal_inst.o illegal_inst.s -g
+
 tlb_miss.o: tlb_miss.s
 	$(AS) -little -o tlb_miss.o tlb_miss.s -g
 
@@ -34,8 +37,8 @@ addr_error.o: addr_error.s
 store_queue.o: store_queue.s
 	$(AS) -little -o store_queue.o store_queue.s -g
 
-sh4_mmu_test.elf: init.o main.o irq.o tlb_miss.o addr_error.o
-	$(CC) -Wl,-e_start,-Ttext,0x8c010000 init.o main.o irq.o tlb_miss.o addr_error.o -o sh4_mmu_test.elf -nostartfiles -nostdlib -lgcc -m4 -g
+sh4_mmu_test.elf: init.o main.o irq.o tlb_miss.o addr_error.o illegal_inst.o
+	$(CC) -Wl,-e_start,-Ttext,0x8c010000 init.o main.o irq.o tlb_miss.o addr_error.o illegal_inst.o -o sh4_mmu_test.elf -nostartfiles -nostdlib -lgcc -m4 -g
 
 sh4_mmu_test.bin: sh4_mmu_test.elf
 	$(OBJCOPY) -O binary -j .text -j .data -j .bss -j .rodata  --set-section-flags .bss=alloc,load,contents sh4_mmu_test.elf sh4_mmu_test.bin

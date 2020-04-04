@@ -10,7 +10,7 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 .globl testcase_data_tlb_miss
-
+.globl invalidate_tlb, enable_mmu, disable_mmu
 
 	.align 2
 
